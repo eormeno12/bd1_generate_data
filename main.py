@@ -1,9 +1,9 @@
-import os
 import random
 import psycopg2
 from faker import Faker
 from faker.providers import person, address, date_time, company, lorem, BaseProvider
 from decouple import config
+from datetime import datetime, timedelta
 
 DB_NAME = config('DB_NAME')
 DB_USER = config('DB_USER')
@@ -64,8 +64,8 @@ fake.add_provider(PlasticProductProvider)
 fake.add_provider(RawMaterialProvider)
 
 # Función para insertar datos en la tabla Persona
-def insert_persona():
-    dni = fake.random_number(8)
+def insert_persona(idx):
+    dni = str(idx).zfill(8)
 
     cursor.execute(
         "INSERT INTO Persona (DNI, Nombre, Celular, CorreoElectronico, Direccion) VALUES (%s, %s, %s, %s, %s) RETURNING DNI",
@@ -75,8 +75,8 @@ def insert_persona():
     return cursor.fetchone()[0]
 
 # Función para insertar datos en la tabla Empleado
-def insert_empleado():
-    dni = insert_persona()
+def insert_empleado(idx):
+    dni = insert_persona(idx)
 
     cursor.execute(
         "INSERT INTO Empleado (DNI) VALUES (%s) RETURNING DNI",
@@ -86,8 +86,8 @@ def insert_empleado():
     return cursor.fetchone()[0]
 
 # Función para insertar datos en la tabla CompradorNatural
-def insert_comprador_natural():
-    dni = insert_persona()
+def insert_comprador_natural(idx):
+    dni = insert_persona(idx)
 
     cursor.execute(
         "INSERT INTO CompradorNatural (DNI) VALUES (%s) RETURNING DNI",
@@ -97,8 +97,8 @@ def insert_comprador_natural():
     return cursor.fetchone()[0]
 
 # Función para insertar datos en la tabla CompradorJuridico
-def insert_comprador_juridico():
-    ruc = fake.random_number(11)
+def insert_comprador_juridico(idx):
+    ruc = str(idx).zfill(11)
     cursor.execute(
         "INSERT INTO CompradorJuridico (RUC, Nombre) VALUES (%s, %s) RETURNING RUC",
         (ruc, fake.company())
@@ -145,10 +145,14 @@ def insert_producto_cotizado(producto_base_codigo):
     return cursor.fetchone()[0]
 
 # Función para insertar datos en la tabla Lote
-def insert_lote():
+def insert_lote(idx):
+    currentDateTime = datetime.now() + timedelta(minutes=idx)
+    date = currentDateTime.strftime("2000-%m-%d")
+    time = currentDateTime.strftime("%H:%M:%S")
+    
     cursor.execute(
         "INSERT INTO Lote (Fecha, Hora, CostoTotal) VALUES (%s, %s, %s) RETURNING Fecha, Hora",
-        (fake.date(), fake.time(), fake.random_number(4))
+        (date, time, fake.random_number(4))
     )
     return cursor.fetchone()
 
@@ -197,17 +201,13 @@ def insert_pide(producto_cotizado_codigo, empleado_dni, comprador_natural_dni):
 
 def generate_data(numRecords):
   # Generar 1k, 10k, 100k, y 1M de datos simulados
-  for _ in range(numRecords):
-      dniEmpleado = insert_empleado()
-
-      dniComprador = insert_comprador_natural()
+  for i in range(numRecords):
+      dniEmpleado = insert_empleado(i * 2)
+      dniComprador = insert_comprador_natural((i * 2) + 1)
 
       # Representa y CompradorJuridico
-      represents = random.choice([True, False])
-
-      if(represents):
-        ruc = insert_comprador_juridico()
-        insert_representa(dniComprador, ruc)
+      ruc = insert_comprador_juridico(i)
+      insert_representa(dniComprador, ruc)
             
 
       # Datos para la venta
@@ -225,11 +225,13 @@ def generate_data(numRecords):
       else:
         insert_tiene(venta_codigo, producto_base_codigo)
 
-      lote_fecha, lote_hora = insert_lote()
+      lote_fecha, lote_hora = insert_lote(i)
       materia_prima_codigo = insert_materia_prima()
 
       insert_produce(producto_base_codigo, lote_fecha, lote_hora)
       insert_requiere(producto_base_codigo, materia_prima_codigo)
+
+      print(f"Registro {i+1} de {numRecords}", end="\r")
     
 
   # Hacer commit de las transacciones
@@ -240,12 +242,58 @@ def generate_data(numRecords):
   connection.close()
 
 
-def main():
-  numRecords = [10]
-  # numRecords = [1000, 10000, 100000, 1000000]
-  for num in numRecords:
-    generate_data(num)
+def borrar_contenido_todas_las_tablas():
+    # Obtener los nombres de todas las tablas en la base de datos
+    cursor.execute(f"""
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = '{DB_SCHEMA}' AND table_type = 'BASE TABLE';
+    """)
+    tablas = cursor.fetchall()
 
+    # Iterar sobre las tablas y borrar su contenido
+    for tabla in tablas:
+        nombre_tabla = tabla[0]
+        cursor.execute(f"TRUNCATE TABLE {nombre_tabla} RESTART IDENTITY CASCADE")
+        print(f"Contenido de la tabla {nombre_tabla} borrado.")
+
+    connection.commit()
+
+
+def menu_info():
+    print("1. Generar datos")
+    print("2. Borrar contenido de todas las tablas")
+    print("3. Salir")
+
+
+def select_option():
+    option = int(input("Ingrese una opción: "))
+
+    while(option < 1 or option > 3):
+        option = int(input("Ingrese una opción válida: "))
+
+    return option
+
+
+def menu():
+    menu_info()
+
+
+    option = select_option()
+
+    while(option != 3):
+        if(option == 1):
+            numRecords = int(input("Ingrese el número de registros a generar: "))
+            generate_data(numRecords)
+        elif(option == 2):
+            borrar_contenido_todas_las_tablas()
+
+        menu_info()
+        option = select_option()
+
+
+def main():
+    menu()
 
 if __name__ == "__main__":
     main()
