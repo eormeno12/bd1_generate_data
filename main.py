@@ -175,21 +175,21 @@ def insert_representa(dni, ruc):
 def insert_tiene(venta_codigo, producto_codigo):
     cursor.execute(
         "INSERT INTO Tiene (VentaCodigo, ProductoCodigo, Cantidad) VALUES (%s, %s, %s)",
-        (venta_codigo, producto_codigo, fake.random_number(2))
+        (venta_codigo, producto_codigo, fake.random_number(2) + 1)
     )
 
 # Función para insertar datos en la tabla Produce
 def insert_produce(producto_base_codigo, lote_fecha, lote_hora):
     cursor.execute(
         "INSERT INTO Produce (ProductoBaseCodigo, LoteFecha, LoteHora, Cantidad) VALUES (%s, %s, %s, %s)",
-        (producto_base_codigo, lote_fecha, lote_hora, fake.random_number(3))
+        (producto_base_codigo, lote_fecha, lote_hora, fake.random_number(3) + 1)
     )
 
 # Función para insertar datos en la tabla Requiere
 def insert_requiere(producto_base_codigo, materia_prima_codigo):
     cursor.execute(
         "INSERT INTO Requiere (ProductoBaseCodigo, MateriaPrimaCodigo, Cantidad) VALUES (%s, %s, %s)",
-        (producto_base_codigo, materia_prima_codigo, fake.random_number(2))
+        (producto_base_codigo, materia_prima_codigo, fake.random_number(2) + 1)
     )
 
 # Función para insertar datos en la tabla Pide
